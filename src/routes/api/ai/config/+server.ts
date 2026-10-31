@@ -3,23 +3,33 @@ import { error, json } from '@sveltejs/kit';
 import { requireCapabilityAccess } from '$lib/server/access';
 import { aiSettings } from '$lib/server/ai/config';
 import { mcpConnections } from '$lib/server/mcp/config';
+import { logEvent } from '$lib/server/log';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async (event) => {
 	if (env.AI_ENABLED === 'true' || env.MCP_CLIENT_ENABLED === 'true')
 		await requireCapabilityAccess(event);
 	try {
+		const ai = aiSettings(env);
+		const servers = mcpConnections(env);
+		await logEvent('debug', 'ai.config', {
+			providers: ai.providers.length,
+			models: ai.providers.reduce((total, provider) => total + provider.models.length, 0),
+			mcpEnabled: env.MCP_CLIENT_ENABLED === 'true',
+			mcpServers: servers.length
+		});
 		return json(
 			{
-				ai: aiSettings(env),
+				ai,
 				mcp: {
 					enabled: env.MCP_CLIENT_ENABLED === 'true',
-					servers: mcpConnections(env).map(({ alias }) => ({ alias }))
+					servers: servers.map(({ alias }) => ({ alias }))
 				}
 			},
 			{ headers: { 'Cache-Control': 'no-store' } }
 		);
 	} catch {
+		await logEvent('warn', 'ai.config', { outcome: 'invalid-configuration' });
 		error(503, 'Assistant setup is incomplete. Check the private server configuration.');
 	}
 };

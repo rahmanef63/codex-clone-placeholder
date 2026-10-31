@@ -5,6 +5,7 @@ import { requireCapabilityAccess, readJsonBody } from '$lib/server/access';
 import { byokToken } from '$lib/server/ai/config';
 import { connectionFor } from '$lib/server/mcp/config';
 import { executeRemoteTool, listRemoteTools } from '$lib/server/mcp/client';
+import { logEvent } from '$lib/server/log';
 import type { RequestHandler } from './$types';
 
 const bodySchema = z.discriminatedUnion('action', [
@@ -35,8 +36,14 @@ export const POST: RequestHandler = async (event) => {
 		if (input.action === 'execute' && !connection.tools.includes(input.tool))
 			throw new Error('Unapproved tool');
 	} catch {
+		await logEvent('warn', 'mcp.tools', { outcome: 'invalid-request' });
 		error(400, 'Check the configured server, token, tool and explicit confirmation.');
 	}
+	const fields = {
+		action: input.action,
+		alias: input.alias,
+		...(input.action === 'execute' ? { tool: input.tool } : {})
+	};
 	try {
 		const output =
 			input.action === 'list'
@@ -49,8 +56,10 @@ export const POST: RequestHandler = async (event) => {
 						input.confirmed,
 						event.request.signal
 					);
+		await logEvent('info', 'mcp.tools', { ...fields, outcome: 'ok' });
 		return json(output, { headers: { 'Cache-Control': 'no-store' } });
 	} catch {
+		await logEvent('warn', 'mcp.tools', { ...fields, outcome: 'error' });
 		error(
 			502,
 			'The remote tool request failed or exceeded its limits. A submitted action may have completed; inspect its state before retrying.'

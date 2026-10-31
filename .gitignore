@@ -31,3 +31,6 @@ coverage
 
 # Local MSO runtime state — never commit
 .mso/
+
+# Local activity log (LOG_LEVEL / LOG_FILE) — never commit
+.local-logs/

@@ -59,12 +59,36 @@ The SvelteKit server validates selection in `src/lib/server/ai/config.ts` and
 | `MCP_SERVERS_JSON`        | Empty   | Private aliases, fixed public HTTPS URLs, `bearer`/`x-api-key`, exact tool allowlists. Never put credentials in endpoint URLs. |
 | `MCP_SERVER_ENABLED`      | `false` | Enables the read-only `/api/mcp/server` endpoint.                                                                              |
 | `MCP_SERVER_TOKEN`        | Empty   | Separate private bearer credential for the MCP server, at least 32 characters.                                                 |
+| `LOG_LEVEL`               | Unset   | `src/lib/server/log.ts`; `debug`/`info`/`warn`/`error` enable the local activity log, unset or any other value writes nothing. |
+| `LOG_FILE`                | Unset   | `src/lib/server/log.ts`; NDJSON destination. Unset writes `./.local-logs/activity.jsonl` (git-ignored).                        |
 
 Provider keys and remote MCP credentials come from the current request and stay in memory;
 they are not stored in Convex, browser storage or server fallback environment variables.
 The application relays them to the selected provider, so use a trusted HTTPS deployment.
 Do not enable request-body logging for these routes. Instance-local burst counters protect
 small deployments; use an edge/distributed limiter before scaling replicas.
+
+### Local activity log
+
+`src/lib/server/log.ts` writes NDJSON records only when an operator sets `LOG_LEVEL` to
+`debug`, `info`, `warn` or `error`. Unset is the default and produces no output and no file,
+in every environment including production. `LOG_FILE` overrides the destination; the default
+`./.local-logs/activity.jsonl` is git-ignored and its directory is created lazily.
+
+| Surface           | Event           | Captured                                                        |
+| ----------------- | --------------- | --------------------------------------------------------------- |
+| `/api/ai/config`  | `ai.config`     | provider count, approved model count, MCP flag and server count |
+| `/api/ai/chat`    | `ai.chat.start` | provider, model, message count, total message characters        |
+|                   | `ai.chat.end`   | provider, model, `ok`/`error`                                   |
+| `/api/mcp/tools`  | `mcp.tools`     | action, alias, tool name (execute only), `ok`/`error`           |
+| `/api/mcp/server` | `mcp.server`    | JSON-RPC method name, HTTP status, `ok`/`error`                 |
+
+Never recorded: request or response bodies, message text, `authorization` and `cookie`
+headers, API keys or tokens, and full URLs carrying a query string. Fields are flat
+primitives only — an object or array passed to `logEvent` is dropped instead of serialized —
+values matching a key shape (`sk-`, `Bearer `, `x-api-key`) are redacted, each record is
+capped at 4 KiB, and a failed write is swallowed so logging cannot fail a request. This is a
+developer aid, not an audit trail: it is per-process, unprotected and never read by the app.
 
 ## MANEF AI hub bridge: optional
 

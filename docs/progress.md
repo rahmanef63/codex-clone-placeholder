@@ -49,6 +49,26 @@ svelte-check        0 errors, 0 warnings
 
 Playwright is **not** green and cannot be claimed: see the correction below.
 
+## Local activity log
+
+`src/lib/server/log.ts` (one module, no dependency) writes NDJSON activity records for local
+debugging. It is **off by default**: `LOG_LEVEL` must be set to `debug`, `info`, `warn` or
+`error`, so a production deployment that sets nothing writes no file and no bytes.
+`LOG_FILE` picks the path; the default `./.local-logs/activity.jsonl` is git-ignored and
+created lazily on the first record.
+
+Captured, one call per surface: `ai.config` (provider and model counts, MCP flag/server
+count), `ai.chat.start` (provider, model, message count, total characters),
+`ai.chat.end` (`ok`/`error`), `mcp.tools` (action, alias, tool name, outcome) and
+`mcp.server` (JSON-RPC method, status, outcome).
+
+Deliberately never captured: request or response bodies, message text, `authorization` or
+`cookie` headers, API keys and tokens, and URLs with a query string. `logEvent` accepts flat
+primitives only — an object or array is dropped rather than serialized — `redact()` strips
+`sk-`, `Bearer ` and `x-api-key` shapes plus URL query strings, records are capped at 4 KiB,
+and a write failure is swallowed. It is a developer aid, not an audit trail or a second
+source of truth: nothing in the app reads the file.
+
 ## Correction — the AC test suites do not exist
 
 `docs/PRD.md` §7 and `docs/implementation-plan.md` §10 both state that

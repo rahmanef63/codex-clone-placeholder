@@ -20,7 +20,12 @@ export function providerFetch(
 	};
 }
 
-export function chatResponse(input: ReturnType<typeof parseChat>, requestSignal: AbortSignal) {
+export function chatResponse(
+	input: ReturnType<typeof parseChat>,
+	requestSignal: AbortSignal,
+	// Local-only activity hook. Receives a closed outcome string, never model text.
+	onOutcome: (outcome: 'ok' | 'error') => void = () => undefined
+) {
 	const stop = new AbortController();
 	const signal = AbortSignal.any([requestSignal, stop.signal, AbortSignal.timeout(60_000)]);
 	const providers = {
@@ -85,7 +90,9 @@ export function chatResponse(input: ReturnType<typeof parseChat>, requestSignal:
 				if (signal.aborted) throw new Error('Generation stopped');
 				if (pending) send({ type: 'text', text: pending });
 				send({ type: 'done' });
+				onOutcome('ok');
 			} catch {
+				onOutcome('error');
 				send({
 					type: 'error',
 					message:
